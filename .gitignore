@@ -1,0 +1,10 @@
+# 构建产物
+zygisk-activator/build/
+*.apk
+*.idsig
+
+# WorkBuddy 工作区
+.workbuddy/
+
+# 系统
+.DS_Store

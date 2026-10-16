@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KernelSU 风格：粗描边圆环 + 中间对勾（白色描边，由代码 colorFilter 上色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,2.6 C17.19,2.6 21.4,6.81 21.4,12 C21.4,17.19 17.19,21.4 12,21.4 C6.81,21.4 2.6,17.19 2.6,12 C2.6,6.81 6.81,2.6 12,2.6 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M7.8,12.3 L10.9,15.4 L16.4,9.2"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

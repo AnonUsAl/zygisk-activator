@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Miuix token 对照（dark） -->
+    <color name="page_bg">#000000</color>          <!-- surface -->
+    <color name="card_bg">#242424</color>          <!-- surfaceContainer -->
+    <color name="inset_bg">#161616</color>
+    <color name="text_primary">#E6FFFFFF</color>   <!-- onSurfaceContainer -->
+    <color name="text_secondary">#737373</color>   <!-- onSurfaceContainerVariant -->
+    <color name="text_tertiary">#666666</color>    <!-- onSurfaceContainerHigh -->
+    <color name="accent">#277AF7</color>           <!-- primary -->
+    <color name="on_accent">#FFFFFF</color>        <!-- onPrimary -->
+    <color name="accent_container">#2B3B54</color> <!-- tertiaryContainer -->
+    <color name="accent_container_text">#4788FF</color> <!-- onTertiaryContainer -->
+    <color name="success">#3ED17A</color>          <!-- 自定义成功色 -->
+    <color name="danger">#F12522</color>           <!-- error -->
+    <color name="secondary_fill">#434343</color>   <!-- secondaryVariant -->
+    <color name="secondary_text">#D9D9D9</color>   <!-- onSecondaryVariant -->
+    <color name="seg_track">#262626</color>
+    <color name="seg_pill">#3F3F3F</color>
+    <color name="divider">#393939</color>          <!-- dividerLine -->
+    <color name="outline">#404040</color>          <!-- outline -->
+
+    <!-- 全部激活时总览卡的「KernelSU 绿卡」（取自 KernelSU 源码 Color(0xFF1A3825)） -->
+    <color name="state_ok_card">#1A3825</color>
+    <color name="state_ok_title">#4ADE6E</color>
+    <color name="state_ok_sub">#7FC79A</color>
+    <color name="state_ok_ring">#36D167</color>
+    <color name="state_ok_mode">#C6E8D2</color>
+
+    <!-- 按压反馈（Miuix 的涟漪色） -->
+    <color name="ripple">#1FFFFFFF</color>
+</resources>
