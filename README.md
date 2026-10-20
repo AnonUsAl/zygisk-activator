@@ -29,9 +29,13 @@ KernelSU 的 late-load 模式下，内核模块能挂、`su` 能用，但 **Zygi
 
 ## 界面
 
-界面提供 Miuix、iOS 和 HarmonyOS 三种可选风格，默认使用 Miuix。iOS 风格采用大标题、分组列表和悬浮半透明导航；HarmonyOS 风格强调光感材质、层叠卡片和胶囊导航。风格选择与浅色/深色模式相互独立。激活、检测、日志、GhostLock 快捷入口和设置功能保持不变。
+界面提供 Miuix、iOS 和 HarmonyOS 三种可选风格，默认使用 Miuix。三种风格共用同一套结构，差别在系统级的设计语言：
 
-iOS 开关控件移植自 [vejei/CupertinoSwitch](https://github.com/vejei/CupertinoSwitch)（MIT）；HarmonyOS 玻璃表面的视觉参数参考 [HOSRookie/ohos_glass_ui](https://github.com/HOSRookie/ohos_glass_ui)（Apache-2.0）。第三方说明见 [`zygisk-activator/THIRD_PARTY_NOTICES.md`](zygisk-activator/THIRD_PARTY_NOTICES.md)。
+- **iOS**：`#F2F2F7` 分组底色、10pt 圆角白卡、缩进到文字起点的发丝分隔线、34pt 大标题、13pt 大写分组标题、蓝色 `#007AFF` 强调色、无底色的导航文字按钮、51×31 的 Cupertino 开关，底部是 49pt 贴底 tab bar。
+- **HarmonyOS**：`#F1F3F5` 系统底色、16dp 圆角白卡、5% 黑色发丝线、30sp 大标题、品牌蓝 `#0A59F7` 单色强调、胶囊按钮、状态卡内嵌 4dp 进度条，底部是 56dp 贴底导航条。全局只用「品牌蓝 + 中性灰阶 + 语义绿/红」，不使用渐变或弥散光斑。
+- **Miuix**：保持原样的中性圆角卡、KernelSU 绿卡与胶囊按钮。
+
+风格选择与浅色/深色模式相互独立。激活、检测、日志、GhostLock 快捷入口和设置功能保持不变。iOS 开关控件移植自 [vejei/CupertinoSwitch](https://github.com/vejei/CupertinoSwitch)（MIT），第三方说明见 [`zygisk-activator/THIRD_PARTY_NOTICES.md`](zygisk-activator/THIRD_PARTY_NOTICES.md)。
 
 ## 构建
 

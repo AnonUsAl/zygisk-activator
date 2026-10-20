@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- iOS 17 语义色（浅色）
+     systemGroupedBackground / secondarySystemGroupedBackground / label / separator ...
+     卡片一律纯白、无描边、无投影，分组靠页面底色与发丝分隔线区分。 -->
 <resources>
-    <color name="ios_page_bg">#F2F2F7</color>
-    <color name="ios_card_bg">#FFFFFF</color>
-    <color name="ios_text_primary">#1C1C1E</color>
-    <color name="ios_text_secondary">#6D6D72</color>
-    <color name="ios_text_tertiary">#8E8E93</color>
-    <color name="ios_accent">#007AFF</color>
+    <color name="ios_page_bg">#F2F2F7</color>            <!-- systemGroupedBackground -->
+    <color name="ios_card_bg">#FFFFFF</color>            <!-- secondarySystemGroupedBackground -->
+    <color name="ios_text_primary">#000000</color>       <!-- label -->
+    <color name="ios_text_secondary">#B33C3C43</color>   <!-- ARGB：alpha 在前，70% -->
+    <color name="ios_text_tertiary">#4D3C3C43</color>    <!-- 30% -->
+    <color name="ios_accent">#007AFF</color>             <!-- systemBlue -->
     <color name="ios_on_accent">#FFFFFF</color>
-    <color name="ios_accent_container">#E5F0FF</color>
-    <color name="ios_success">#34C759</color>
-    <color name="ios_danger">#FF3B30</color>
-    <color name="ios_secondary_fill">#E5E5EA</color>
-    <color name="ios_secondary_text">#1C1C1E</color>
-    <color name="ios_idle_start">#EAF3FF</color>
-    <color name="ios_idle_end">#DCEBFF</color>
-    <color name="ios_ok_card">#DFFAE4</color>
-    <color name="ios_ok_title">#124A22</color>
-    <color name="ios_ok_sub">#3A7A50</color>
-    <color name="ios_ok_ring">#36D167</color>
-    <color name="ios_ok_mode">#1E5C34</color>
+    <color name="ios_accent_container">#1A007AFF</color> <!-- systemBlue 10% -->
+    <color name="ios_success">#34C759</color>            <!-- systemGreen -->
+    <color name="ios_danger">#FF3B30</color>             <!-- systemRed -->
+    <color name="ios_secondary_fill">#E5E5EA</color>     <!-- systemGray5，胶囊次按钮底 -->
+    <color name="ios_secondary_text">#000000</color>
+    <color name="ios_chevron">#C7C7CC</color>            <!-- 列表箭头，比 tertiaryLabel 更淡 -->
+    <color name="ios_separator">#5C3C3C36</color>        <!-- 36% -->
+    <color name="ios_highlight">#14000000</color>        <!-- 行按压高亮 8% -->
+    <color name="ios_bar_bg">#F9F9F9</color>             <!-- tab bar 表面 -->
 </resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iOS：house.fill —— 屋脊做圆角、门洞是圆顶的，不是方的；
+     两个子路径 + evenOdd，门洞直接挖掉（不能靠在上面盖一块底色，深浅色都要对）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M10.86,3.42 A1.9,1.9 0 0 1 13.14,3.42 L20.62,9.47 C21.05,9.82 21.3,10.36 21.3,10.94 V19.2 A2.3,2.3 0 0 1 19,21.5 H5 A2.3,2.3 0 0 1 2.7,19.2 V10.94 C2.7,10.36 2.95,9.82 3.38,9.47 Z M9.9,21.5 V15.7 A2.1,2.1 0 0 1 12,13.6 A2.1,2.1 0 0 1 14.1,15.7 V21.5 Z" />
+</vector>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 构建：cpu，圆角芯片、内核方块和四向引脚保持同一线宽。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:pathData="M8.5,6.5 H15.5 A2,2 0 0 1 17.5,8.5 V15.5 A2,2 0 0 1 15.5,17.5 H8.5 A2,2 0 0 1 6.5,15.5 V8.5 A2,2 0 0 1 8.5,6.5 Z"
+        android:strokeColor="#FFFFFF" android:strokeWidth="1.8"
+        android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path
+        android:pathData="M10.6,10.6 H13.4 V13.4 H10.6 Z"
+        android:strokeColor="#FFFFFF" android:strokeWidth="2"
+        android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path
+        android:pathData="M9.6,3 V6.5 M14.4,3 V6.5 M9.6,17.5 V21 M14.4,17.5 V21"
+        android:strokeColor="#FFFFFF" android:strokeWidth="1.8"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

@@ -28,7 +28,3 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ```
-
-## HarmonyOS glass UI design reference
-
-The HarmonyOS glass surface colors, spacing, and interaction styling are adapted as design guidance from [HOSRookie/ohos_glass_ui](https://github.com/HOSRookie/ohos_glass_ui). No ArkTS source code or assets from that project are included in this Android app. The upstream library is distributed under Apache License 2.0; its license is available in the linked repository.

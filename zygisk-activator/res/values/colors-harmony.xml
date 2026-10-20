@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- HarmonyOS 5 设计规范（浅色）
+     只保留一套语义色：品牌蓝 #0A59F7 + 中性灰阶。
+     卡面纯白、无渐变、无投影；层级靠留白与分隔线，不靠光斑。 -->
 <resources>
-    <color name="harmony_page_bg">#F1F5FA</color>
-    <color name="harmony_card_bg">#FFFFFF</color>
-    <color name="harmony_text_primary">#101828</color>
-    <color name="harmony_text_secondary">#667085</color>
-    <color name="harmony_text_tertiary">#98A2B3</color>
-    <color name="harmony_accent">#5DD784</color>
-    <color name="harmony_on_accent">#173622</color>
-    <color name="harmony_accent_container">#DFF7E7</color>
-    <color name="harmony_success">#42C971</color>
-    <color name="harmony_danger">#F04438</color>
-    <color name="harmony_secondary_fill">#EAF6EE</color>
-    <color name="harmony_secondary_text">#344054</color>
-    <color name="harmony_idle_start">#5DD784</color>
-    <color name="harmony_idle_end">#35B969</color>
-    <color name="harmony_ok_card">#3FC875</color>
-    <color name="harmony_ok_title">#FFFFFF</color>
-    <color name="harmony_ok_sub">#E1FFF5</color>
-    <color name="harmony_ok_ring">#FFFFFF</color>
-    <color name="harmony_ok_mode">#E1FFF5</color>
+    <color name="harmony_page_bg">#F1F3F5</color>          <!-- 系统背景 -->
+    <color name="harmony_card_bg">#FFFFFF</color>          <!-- 卡片 -->
+    <color name="harmony_text_primary">#E6000000</color>   <!-- 一级文本 90% -->
+    <color name="harmony_text_secondary">#99000000</color> <!-- 二级文本 60% -->
+    <color name="harmony_text_tertiary">#66000000</color>  <!-- 三级文本 40% -->
+    <color name="harmony_accent">#0A59F7</color>           <!-- 品牌蓝 -->
+    <color name="harmony_on_accent">#FFFFFF</color>
+    <color name="harmony_accent_container">#1A0A59F7</color> <!-- 品牌蓝 10% -->
+    <color name="harmony_success">#64BB5C</color>          <!-- 成功绿 -->
+    <color name="harmony_danger">#E84026</color>           <!-- 错误红 -->
+    <color name="harmony_secondary_fill">#0D000000</color> <!-- 次级按钮/填充 5% -->
+    <color name="harmony_secondary_text">#E6000000</color>
+    <color name="harmony_separator">#0D000000</color>      <!-- 分隔线 5% -->
+    <color name="harmony_highlight">#0F000000</color>      <!-- 行按压高亮 -->
+    <color name="harmony_bar_bg">#FFFFFF</color>           <!-- 底部导航表面 -->
 </resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 系统：info.circle.fill，白色实心符号并挖出透明的信息笔画。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M12,6.7 A1.35,1.35 0 1 1 12,9.4 A1.35,1.35 0 1 1 12,6.7 Z M10.9,11 H13.1 V17.4 H10.9 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

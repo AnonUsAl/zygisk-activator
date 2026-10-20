@@ -6,5 +6,14 @@
         <item name="android:navigationBarColor">@color/page_bg</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlHighlight">@color/theme_highlight</item>
+        <item name="android:colorEdgeEffect">@color/accent</item>
+        <item name="android:textColorHighlight">@color/theme_selection</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorPrimaryDark">@color/page_bg</item>
     </style>
 </resources>

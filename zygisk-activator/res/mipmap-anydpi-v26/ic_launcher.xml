@@ -2,4 +2,6 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_bg" />
     <foreground android:drawable="@drawable/ic_fg" />
+    <!-- Android 13+ 主题图标用（鸿蒙/类原生都支持），只贡献形状 -->
+    <monochrome android:drawable="@drawable/ic_fg_mono" />
 </adaptive-icon>

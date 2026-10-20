@@ -22,11 +22,15 @@
 
     <!-- 全部激活时总览卡的「KernelSU 绿卡」（取自 KernelSU 源码 Color(0xFF1A3825)） -->
     <color name="state_ok_card">#1A3825</color>
-    <color name="state_ok_title">#4ADE6E</color>
-    <color name="state_ok_sub">#7FC79A</color>
+    <color name="state_ok_title">#E9EBEA</color>
+    <color name="state_ok_sub">#C6D4C9</color>
     <color name="state_ok_ring">#36D167</color>
-    <color name="state_ok_mode">#C6E8D2</color>
+    <color name="state_ok_mode">#E9EBEA</color>
 
     <!-- 按压反馈（Miuix 的涟漪色） -->
     <color name="ripple">#1FFFFFFF</color>
+
+    <!-- 平台控件高亮 / 文本选择背景 -->
+    <color name="theme_highlight">#33FFFFFF</color>
+    <color name="theme_selection">#4D0A84FF</color>
 </resources>

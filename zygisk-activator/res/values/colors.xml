@@ -31,4 +31,8 @@
 
     <!-- 按压反馈（Miuix 的涟漪色） -->
     <color name="ripple">#14000000</color>
+
+    <!-- 平台控件高亮 / 文本选择背景（避免继承 ROM 的橙黄色） -->
+    <color name="theme_highlight">#1F000000</color>
+    <color name="theme_selection">#33007AFF</color>
 </resources>

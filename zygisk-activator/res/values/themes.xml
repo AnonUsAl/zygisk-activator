@@ -6,5 +6,18 @@
         <item name="android:navigationBarColor">@color/page_bg</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
+        <!-- 颜色全部由 values / values-night 自己给，禁止系统再叠一层强制深色，
+             否则部分 ROM 的自动反色会把文字染成奇怪的色调 -->
+        <item name="android:forceDarkAllowed">false</item>
+
+        <!-- 平台自绘控件（对话框单选点、按钮文字、文本选择手柄、滚动边缘光）
+             如果不显式指定，在小米 ROM 上会继承系统橙黄色。 -->
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlHighlight">@color/theme_highlight</item>
+        <item name="android:colorEdgeEffect">@color/accent</item>
+        <item name="android:textColorHighlight">@color/theme_selection</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorPrimaryDark">@color/page_bg</item>
     </style>
 </resources>

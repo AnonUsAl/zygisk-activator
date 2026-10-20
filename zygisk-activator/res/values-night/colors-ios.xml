@@ -1,22 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- iOS 17 语义色（深色） -->
 <resources>
     <color name="ios_page_bg">#000000</color>
     <color name="ios_card_bg">#1C1C1E</color>
     <color name="ios_text_primary">#FFFFFF</color>
-    <color name="ios_text_secondary">#98989D</color>
-    <color name="ios_text_tertiary">#8E8E93</color>
+    <color name="ios_text_secondary">#B3EBEBF5</color>
+    <color name="ios_text_tertiary">#4DEBEBF5</color>
     <color name="ios_accent">#0A84FF</color>
     <color name="ios_on_accent">#FFFFFF</color>
-    <color name="ios_accent_container">#152A45</color>
+    <color name="ios_accent_container">#260A84FF</color>
     <color name="ios_success">#30D158</color>
     <color name="ios_danger">#FF453A</color>
     <color name="ios_secondary_fill">#2C2C2E</color>
-    <color name="ios_secondary_text">#F2F2F7</color>
-    <color name="ios_idle_start">#1A3150</color>
-    <color name="ios_idle_end">#14253D</color>
-    <color name="ios_ok_card">#1A3825</color>
-    <color name="ios_ok_title">#4ADE6E</color>
-    <color name="ios_ok_sub">#7FC79A</color>
-    <color name="ios_ok_ring">#36D167</color>
-    <color name="ios_ok_mode">#C6E8D2</color>
+    <color name="ios_secondary_text">#FFFFFF</color>
+    <color name="ios_chevron">#48484A</color>
+    <color name="ios_separator">#99545458</color>
+    <color name="ios_highlight">#1FFFFFFF</color>
+    <color name="ios_bar_bg">#1C1C1E</color>
 </resources>
