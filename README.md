@@ -1,6 +1,6 @@
 # Zygisk 一键激活
 
-KernelSU **late-load（越狱）模式**下，一键激活 **Zygisk Next** + **Vector**（JingMatrix 的 LSPosed 续作）的 Android 应用。界面与交互完全对齐 [KernelSU](https://github.com/tiann/KernelSU) 的 Miuix 设计语言。
+KernelSU **late-load（越狱）模式**下，一键激活 **Zygisk Next** + **Vector**（JingMatrix 的 LSPosed 续作）的 Android 应用。默认保留 Miuix 风格，并可在设置中切换为 iOS 或 HarmonyOS 风格。
 
 ## 它解决什么问题
 
@@ -23,13 +23,15 @@ KernelSU 的 late-load 模式下，内核模块能挂、`su` 能用，但 **Zygi
 | 一键激活 | 自动把脚本写到 `/data/adb/`，并用 root 跑完整修复流程 |
 | 状态清单 | 7 项逐条体检：root / 脚本 / zn-daemon / zygote 接管 / Zygisk 模块加载 / Vector / 注入，一眼看出哪个没起来 |
 | 运行日志 | 修复过程实时可见、可复制、可清空 |
-| 设置 | 深色模式（跟随系统/浅色/深色）、打开时自动检测、清空日志 |
+| 设置 | 界面风格（Miuix/iOS/HarmonyOS）、深色模式（跟随系统/浅色/深色）、打开时自动检测、清空日志 |
 
 激活任务用 `setsid` 丢进独立会话执行 —— 因为第 3 步会重启 zygote，App 自己会被一起杀掉，但任务不会中断；重开 App 就能从日志里看到完整结果。
 
 ## 界面
 
-样式和交互严格照着 KernelSU 的 Miuix 实现（尺寸数值直接取自其源码）：卡片圆角 16dp、页面留白 12dp、大标题 32sp、状态卡深色 `#1A3825`、底部栏 64dp / 图标 26dp / 文字 12sp；按压反馈是 Miuix 的 `PressFeedbackType.Tilt`（缩放 + 3D 倾斜）叠涟漪。
+界面提供 Miuix、iOS 和 HarmonyOS 三种可选风格，默认使用 Miuix。iOS 风格采用大标题、分组列表和悬浮半透明导航；HarmonyOS 风格强调光感材质、层叠卡片和胶囊导航。风格选择与浅色/深色模式相互独立。激活、检测、日志、GhostLock 快捷入口和设置功能保持不变。
+
+iOS 开关控件移植自 [vejei/CupertinoSwitch](https://github.com/vejei/CupertinoSwitch)（MIT）；HarmonyOS 玻璃表面的视觉参数参考 [HOSRookie/ohos_glass_ui](https://github.com/HOSRookie/ohos_glass_ui)（Apache-2.0）。第三方说明见 [`zygisk-activator/THIRD_PARTY_NOTICES.md`](zygisk-activator/THIRD_PARTY_NOTICES.md)。
 
 ## 构建
 

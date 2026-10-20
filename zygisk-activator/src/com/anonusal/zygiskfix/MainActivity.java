@@ -9,6 +9,9 @@ import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -24,12 +27,15 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.anonusal.zygiskfix.vendor.CupertinoSwitch;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -43,7 +49,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Zygisk 一键激活 —— 完全照 KernelSU（Miuix）的样式与交互
+ * Zygisk 一键激活 —— iOS 分组布局与 HarmonyOS 卡片/操作样式
  *
  * 做的事：把内置的修复脚本写到 /data/adb/，然后用 root 跑它。
  *
@@ -53,15 +59,15 @@ import java.util.concurrent.Executors;
  *     这样 App 死了任务也不会断，重开 App 能从日志里看到完整结果。
  *   · 状态清单是独立的只读探测（zygisk-status.sh），逐项显示哪个激活了哪个没有。
  *
- * 视觉全部对齐 KernelSU 的 Miuix 实现（数值取自其源码）：
- *   · Card 圆角 16dp，页面水平 padding 12dp，卡片间距 12dp
- *   · 大标题 title1 = 32sp，TitlePadding = 26dp
+ * 视觉混合 iOS 的大标题与分组表面、HarmonyOS 的色彩/胶囊操作：
+ *   · 大标题 32sp，卡片圆角 22dp，页面水平 padding 18dp
+ *   · 顶部提供日志与状态刷新操作
  *   · 状态卡：dark #1A3825 / light #DFFAE4，标题 22sp SemiBold，版本 15sp，
  *     模式 16sp Medium，右下 110dp 圆环图标 offset(27dp, 31dp) 溢出裁切
  *   · 信息卡：卡内 padding 16dp，图标 24dp(end 12dp)，标题 17sp Medium，
  *     内容 14sp，条目间距 24dp
- *   · 底部栏：ItemHeight 64dp，IconSize 26dp，LabelFontSize 12sp，背景 surface
- *   · 交互：Miuix 的涟漪 + Tilt（按下轻微缩放+倾斜）
+ *   · 底部栏：悬浮圆角底板，选中项使用蓝色胶囊底
+ *   · 交互：涟漪、触点驱动的 3D Tilt；页面切换淡入并轻微滑动
  */
 public class MainActivity extends Activity {
 
@@ -77,13 +83,12 @@ public class MainActivity extends Activity {
     private static final String PREFS     = "zygisk_fix_prefs";
     private static final String KEY_THEME = "theme";        // system | light | dark
     private static final String KEY_AUTO  = "auto_check";   // 打开时自动检测
+    private static final String KEY_STYLE = "ui_style";     // miuix | ios | harmony
 
-    // ---- Miuix 尺寸常量（照抄源码，别改）
-    private static final float CARD_RADIUS   = 16f;   // CardDefaults.CornerRadius
-    private static final float PAGE_PADDING  = 12f;   // LazyColumn horizontal padding
-    private static final float CARD_GAP      = 12f;   // 卡片之间的间距
-    private static final float TITLE_SP      = 32f;   // textStyles.title1
-    private static final float TITLE_PAD     = 26f;   // TopAppBarDefaults.TitlePadding
+    // 风格尺寸由当前选择决定，Miuix 保持原始尺寸作为默认风格。
+    private float cardRadius, pagePadding, cardGap, titleSp;
+    private int cardGapInt;
+    private String uiStyle = "miuix";
     private static final float NAV_HEIGHT    = 64f;   // NavigationBarDefaults.ItemHeight
     private static final float NAV_ICON      = 26f;   // NavigationBarDefaults.IconSize
     private static final float NAV_LABEL_SP  = 12f;   // NavigationBarDefaults.LabelFontSize
@@ -113,9 +118,15 @@ public class MainActivity extends Activity {
     // 主题色（跟随系统深浅色，或设置里的手动选择）
     private int cPage, cCard, cText, cText2, cText3;
     private int cAccent, cOnAccent, cSuccess, cDanger;
-    private int cSecFill, cSecText, cSegTrack, cSegPill, cDivider;
+    private int cSecFill, cSecText, cAccentContainer, cStateIdleStart, cStateIdleEnd;
     private int cOkCard, cOkTitle, cOkSub, cOkRing, cOkMode;
+    private int cRipple;
     private boolean night;
+
+    private boolean isMiuix() { return "miuix".equals(uiStyle); }
+    private boolean isIos() { return "ios".equals(uiStyle); }
+    private boolean isHarmony() { return "harmony".equals(uiStyle); }
+    private int harmonyGlassColor() { return night ? 0x88232646 : 0xA8FFFFFF; }
 
     // 状态卡
     private FrameLayout overviewCard;
@@ -126,7 +137,7 @@ public class MainActivity extends Activity {
     private LinearLayout statusList;
     private TextView logView;
     private TextView btnGo, btnCheck, btnGhost;
-    private TextView tabStatus, tabLog;
+    private TextView headerLogAction;
     private View statusPane, logPane;
 
     // 底部导航
@@ -180,6 +191,16 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         loadColors();
+        getWindow().setStatusBarColor(cPage);
+        getWindow().setNavigationBarColor(cPage);
+        int systemUi = getWindow().getDecorView().getSystemUiVisibility();
+        if (night) systemUi &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        else systemUi |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= 26) {
+            if (night) systemUi &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            else systemUi |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
+        getWindow().getDecorView().setSystemUiVisibility(systemUi);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         buildUi();
         switchPage(savedInstanceState != null ? savedInstanceState.getInt("page", 0) : 0);
@@ -202,27 +223,50 @@ public class MainActivity extends Activity {
     }
 
     private void loadColors() {
+        uiStyle = prefs().getString(KEY_STYLE, "miuix");
+        if (!"ios".equals(uiStyle) && !"harmony".equals(uiStyle)) uiStyle = "miuix";
         night = (getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        cPage     = getColor(R.color.page_bg);
-        cCard     = getColor(R.color.card_bg);
-        cText     = getColor(R.color.text_primary);
-        cText2    = getColor(R.color.text_secondary);
-        cText3    = getColor(R.color.text_tertiary);
-        cAccent   = getColor(R.color.accent);
-        cOnAccent = getColor(R.color.on_accent);
-        cSuccess  = getColor(R.color.success);
-        cDanger   = getColor(R.color.danger);
-        cSecFill  = getColor(R.color.secondary_fill);
-        cSecText  = getColor(R.color.secondary_text);
-        cSegTrack = getColor(R.color.seg_track);
-        cSegPill  = getColor(R.color.seg_pill);
-        cDivider  = getColor(R.color.divider);
-        cOkCard   = getColor(R.color.state_ok_card);
-        cOkTitle  = getColor(R.color.state_ok_title);
-        cOkSub    = getColor(R.color.state_ok_sub);
-        cOkRing   = getColor(R.color.state_ok_ring);
-        cOkMode   = getColor(R.color.state_ok_mode);
+        cardRadius = 16f;
+        pagePadding = isMiuix() ? 12f : (isIos() ? 16f : 16f);
+        cardGap = isMiuix() ? 12f : (isIos() ? 12f : 14f);
+        cardGapInt = isMiuix() ? 12 : (isIos() ? 12 : 14);
+        titleSp = isMiuix() ? 32f : (isIos() ? 32f : 28f);
+
+        if (isMiuix()) {
+            cPage = getColor(R.color.page_bg); cCard = getColor(R.color.card_bg);
+            cText = getColor(R.color.text_primary); cText2 = getColor(R.color.text_secondary);
+            cText3 = getColor(R.color.text_tertiary); cAccent = getColor(R.color.accent);
+            cOnAccent = getColor(R.color.on_accent); cSuccess = getColor(R.color.success);
+            cDanger = getColor(R.color.danger); cSecFill = getColor(R.color.secondary_fill);
+            cSecText = getColor(R.color.secondary_text); cAccentContainer = getColor(R.color.accent_container);
+            cStateIdleStart = cCard; cStateIdleEnd = cCard;
+            cOkCard = getColor(R.color.state_ok_card); cOkTitle = getColor(R.color.state_ok_title);
+            cOkSub = getColor(R.color.state_ok_sub); cOkRing = getColor(R.color.state_ok_ring);
+            cOkMode = getColor(R.color.state_ok_mode); cRipple = getColor(R.color.ripple);
+        } else if (isIos()) {
+            cPage = getColor(R.color.ios_page_bg); cCard = getColor(R.color.ios_card_bg);
+            cText = getColor(R.color.ios_text_primary); cText2 = getColor(R.color.ios_text_secondary);
+            cText3 = getColor(R.color.ios_text_tertiary); cAccent = getColor(R.color.ios_accent);
+            cOnAccent = getColor(R.color.ios_on_accent); cSuccess = getColor(R.color.ios_success);
+            cDanger = getColor(R.color.ios_danger); cSecFill = getColor(R.color.ios_secondary_fill);
+            cSecText = getColor(R.color.ios_secondary_text); cAccentContainer = getColor(R.color.ios_accent_container);
+            cStateIdleStart = getColor(R.color.ios_idle_start); cStateIdleEnd = getColor(R.color.ios_idle_end);
+            cOkCard = getColor(R.color.ios_ok_card); cOkTitle = getColor(R.color.ios_ok_title);
+            cOkSub = getColor(R.color.ios_ok_sub); cOkRing = getColor(R.color.ios_ok_ring);
+            cOkMode = getColor(R.color.ios_ok_mode); cRipple = getColor(R.color.ripple);
+        } else {
+            cPage = getColor(R.color.harmony_page_bg); cCard = getColor(R.color.harmony_card_bg);
+            cText = getColor(R.color.harmony_text_primary); cText2 = getColor(R.color.harmony_text_secondary);
+            cText3 = getColor(R.color.harmony_text_tertiary); cAccent = getColor(R.color.harmony_accent);
+            cOnAccent = getColor(R.color.harmony_on_accent); cSuccess = getColor(R.color.harmony_success);
+            cDanger = getColor(R.color.harmony_danger); cSecFill = getColor(R.color.harmony_secondary_fill);
+            cSecText = getColor(R.color.harmony_secondary_text); cAccentContainer = getColor(R.color.harmony_accent_container);
+            cStateIdleStart = getColor(R.color.harmony_idle_start); cStateIdleEnd = getColor(R.color.harmony_idle_end);
+            cOkCard = getColor(R.color.harmony_ok_card); cOkTitle = getColor(R.color.harmony_ok_title);
+            cOkSub = getColor(R.color.harmony_ok_sub); cOkRing = getColor(R.color.harmony_ok_ring);
+            cOkMode = getColor(R.color.harmony_ok_mode); cRipple = getColor(R.color.ripple);
+        }
     }
 
     // ------------------------------------------------------------- 绘制工具
@@ -246,11 +290,34 @@ public class MainActivity extends Activity {
         return d;
     }
 
-    /** Miuix 的可点表面：涟漪 + 底色。 */
+    /** 带 Android 触控反馈的圆角表面。 */
     private Drawable ripple(int fill, float radiusDp) {
         GradientDrawable content = shape(fill, radiusDp);
         GradientDrawable mask = shape(0xFFFFFFFF, radiusDp);
-        return new RippleDrawable(ColorStateList.valueOf(getColor(R.color.ripple)), content, mask);
+        return new RippleDrawable(ColorStateList.valueOf(cRipple), content, mask);
+    }
+
+    private GradientDrawable gradientShape(int start, int end, float radiusDp) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{start, end});
+        d.setShape(GradientDrawable.RECTANGLE);
+        d.setCornerRadius(dp(radiusDp));
+        return d;
+    }
+
+    /** 半透明前景材质，供 iOS Liquid Glass / HarmonyOS 光感导航近似使用。 */
+    private Drawable glassSurface(float radiusDp) {
+        int fill = isHarmony()
+                ? (night ? 0x88232646 : 0xA8FFFFFF)
+                : (night ? 0xD927292D : 0xDDFBFCFF);
+        GradientDrawable d = shape(fill, radiusDp);
+        d.setStroke(dp(1), night ? 0x33FFFFFF : 0xA0FFFFFF);
+        return d;
+    }
+
+    private Drawable gradientRipple(int start, int end, float radiusDp) {
+        return new RippleDrawable(ColorStateList.valueOf(cRipple),
+                gradientShape(start, end, radiusDp), shape(0xFFFFFFFF, radiusDp));
     }
 
     private TextView text(String s, float sp, int color, String family) {
@@ -262,27 +329,64 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    /** Miuix 的 PressFeedbackType.Tilt：按下时轻微缩放 + 3D 倾斜。 */
+    /** 根据触点象限轻微倾斜，融合 HarmonyOS 式按压反馈。 */
     private void tilt(final View v) {
-        v.setCameraDistance(dp(1280));
+        v.setCameraDistance(dp(isMiuix() ? 1280 : 12));
         v.setOnTouchListener(new View.OnTouchListener() {
             public boolean onTouch(View view, MotionEvent e) {
                 int a = e.getActionMasked();
                 if (a == MotionEvent.ACTION_DOWN) {
-                    view.animate().scaleX(0.975f).scaleY(0.975f)
-                            .rotationX(1.8f).rotationY(-1.8f)
-                            .setDuration(110).start();
+                    if (isMiuix()) {
+                        view.animate().scaleX(0.975f).scaleY(0.975f)
+                                .rotationX(1.8f).rotationY(-1.8f)
+                                .setDuration(110).start();
+                        return false;
+                    }
+                    if (isIos() || isHarmony()) {
+                        view.animate().cancel();
+                        view.animate().scaleX(.98f).scaleY(.98f).translationZ(dp(2))
+                                .setDuration(120)
+                                .setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f)).start();
+                        return false;
+                    }
+                    float x = e.getX();
+                    float y = e.getY();
+                    view.setPivotX(x < view.getWidth() / 2f ? view.getWidth() : 0f);
+                    view.setPivotY(y < view.getHeight() / 2f ? view.getHeight() : 0f);
+                    float rotationX = y < view.getHeight() / 2f ? 8f : -8f;
+                    float rotationY = x < view.getWidth() / 2f ? -8f : 8f;
+                    view.animate().cancel();
+                    view.animate().rotationX(rotationX).rotationY(rotationY)
+                            .setDuration(180).setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f)).start();
                 } else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) {
-                    view.animate().scaleX(1f).scaleY(1f)
-                            .rotationX(0f).rotationY(0f)
-                            .setDuration(190).start();
+                    if (isMiuix()) {
+                        view.animate().scaleX(1f).scaleY(1f)
+                                .rotationX(0f).rotationY(0f).setDuration(190).start();
+                        return false;
+                    }
+                    if (isIos() || isHarmony()) {
+                        view.animate().cancel();
+                        view.animate().scaleX(1f).scaleY(1f).translationZ(0f)
+                                .setDuration(180)
+                                .setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f)).start();
+                        return false;
+                    }
+                    view.animate().cancel();
+                    view.animate().rotationX(0f).rotationY(0f)
+                            .setDuration(260).setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f))
+                            .withEndAction(new Runnable() {
+                                public void run() {
+                                    view.setPivotX(view.getWidth() / 2f);
+                                    view.setPivotY(view.getHeight() / 2f);
+                                }
+                            }).start();
                 }
                 return false;
             }
         });
     }
 
-    /** Miuix 胶囊按钮：圆角＝高度一半。 */
+    /** 胶囊操作按钮：圆角＝高度一半。 */
     private TextView pill(String s, float heightDp, int fill, int fg, float sp) {
         TextView b = text(s, sp, fg, "sans-serif-medium");
         b.setGravity(Gravity.CENTER);
@@ -303,9 +407,25 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------------ UI
 
     private void buildUi() {
+        FrameLayout frame = new FrameLayout(this);
+        if (isHarmony()) {
+            int[] backdrop = night
+                    ? new int[]{0xFF0A0A2E, 0xFF1A0A3E, 0xFF0A1A3E, 0xFF0A0A2E}
+                    : new int[]{0xFFF4F7FC, 0xFFEDEBFA, 0xFFE8F5F4, 0xFFF4F7FC};
+            GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, backdrop);
+            frame.setBackground(bg);
+            addHarmonyGlow(frame, night ? 0x556C3CE8 : 0x446C3CE8, 260, -70, 90);
+            addHarmonyGlow(frame, night ? 0x4400BCD4 : 0x3300BCD4, 210, 180, 390);
+            addHarmonyGlow(frame, night ? 0x334CAF50 : 0x224CAF50, 190, 40, 690);
+        } else {
+            frame.setBackgroundColor(cPage);
+        }
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(cPage);
+        root.setBackgroundColor(isHarmony() ? Color.TRANSPARENT : cPage);
+        frame.addView(root, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         FrameLayout host = new FrameLayout(this);
         host.setLayoutParams(new LinearLayout.LayoutParams(
@@ -319,30 +439,62 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(host);
 
-        root.addView(buildBottomNav());
-        setContentView(root);
+        if (isIos() || isHarmony()) {
+            FrameLayout.LayoutParams navLp = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, dp(76), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+            navLp.leftMargin = dp(isIos() ? 16 : 12);
+            navLp.rightMargin = dp(isIos() ? 16 : 12);
+            navLp.bottomMargin = dp(8);
+            host.addView(buildBottomNav(), navLp);
+        } else {
+            root.addView(buildBottomNav());
+        }
+        setContentView(frame);
     }
 
-    /** 主页。结构照 KernelSU：大标题 → 状态卡 → 操作区 → 列表。 */
+    private void addHarmonyGlow(FrameLayout parent, int color, int sizeDp, int xDp, int yDp) {
+        AmbientGlow glow = new AmbientGlow(this, color);
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(dp(sizeDp), dp(sizeDp));
+        p.leftMargin = dp(xDp);
+        p.topMargin = dp(yDp);
+        parent.addView(glow, p);
+    }
+
+    /** Ambient blurred color spot inspired by the open HarmonyOS glass-ui sample. */
+    private final class AmbientGlow extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        AmbientGlow(Context context, int color) {
+            super(context);
+            paint.setColor(color);
+            paint.setMaskFilter(new BlurMaskFilter(dp(52), BlurMaskFilter.Blur.NORMAL));
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            setClickable(false);
+        }
+        protected void onDraw(Canvas canvas) {
+            float radius = Math.min(getWidth(), getHeight()) * .38f;
+            canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, radius, paint);
+        }
+    }
+
+    /** 首页：大标题、状态卡、胶囊操作和分组状态列表。 */
     private View buildActivatePage() {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(cPage);
-        page.setPadding(dp(PAGE_PADDING), dp(18), dp(PAGE_PADDING), dp(CARD_GAP));
+        page.setBackgroundColor(isHarmony() ? Color.TRANSPARENT : cPage);
+        page.setPadding(dp(pagePadding), dp(isMiuix() ? 4 : (isIos() ? 4 : 10)),
+                dp(pagePadding), dp(isMiuix() ? cardGap : 90));
 
-        // 大标题（KernelSU TopAppBar 的 largeTitle，32sp + 26dp 左内边距）
-        TextView title = text("Zygisk 一键激活", TITLE_SP, cText, "sans-serif");
-        title.setPadding(dp(TITLE_PAD - PAGE_PADDING), 0, 0, 0);
-        title.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 0));
-        page.addView(title);
+        page.addView(buildHeader("Zygisk 激活", true));
 
         // ---- 状态卡
         page.addView(buildStatusCard());
 
         // ---- 主按钮（全部激活后隐藏）
         btnGo = pill("一键激活", 52f, cAccent, cOnAccent, 17f);
-        btnGo.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT, dp(52), CARD_GAP_INT));
+        if (isIos()) btnGo.setBackground(ripple(cAccent, 14f));
+        else if (isHarmony()) btnGo.setBackground(gradientRipple(cAccent,
+                blend(cAccent, Color.WHITE, night ? 0.08f : 0.16f), 18f));
+        btnGo.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT, dp(52), cardGapInt));
         btnGo.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { startActivation(); }
         });
@@ -353,9 +505,11 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT, CARD_GAP_INT));
+                LinearLayout.LayoutParams.WRAP_CONTENT, cardGapInt));
 
         btnCheck = pill("重新检测", 46f, cSecFill, cSecText, 15f);
+        if (isIos()) btnCheck.setBackground(ripple(cSecFill, 12f));
+        else if (isHarmony()) btnCheck.setBackground(ripple(cCard, 16f));
         LinearLayout.LayoutParams ckLp = new LinearLayout.LayoutParams(0, dp(46), 1f);
         ckLp.rightMargin = dp(6);
         btnCheck.setLayoutParams(ckLp);
@@ -366,6 +520,8 @@ public class MainActivity extends Activity {
         row.addView(btnCheck);
 
         btnGhost = pill("打开 GhostLock", 46f, cSecFill, cSecText, 15f);
+        if (isIos()) btnGhost.setBackground(ripple(cSecFill, 12f));
+        else if (isHarmony()) btnGhost.setBackground(ripple(cCard, 16f));
         LinearLayout.LayoutParams ghLp = new LinearLayout.LayoutParams(0, dp(46), 1f);
         ghLp.leftMargin = dp(6);
         btnGhost.setLayoutParams(ghLp);
@@ -377,47 +533,31 @@ public class MainActivity extends Activity {
         page.addView(row);
         btnRow = row;
 
-        // ---- 分段控件（Miuix TabRow 观感：灰轨 + 白 pill）
-        LinearLayout seg = new LinearLayout(this);
-        seg.setOrientation(LinearLayout.HORIZONTAL);
-        seg.setBackground(shape(cSegTrack, 20f));
-        seg.setPadding(dp(4), dp(4), dp(4), dp(4));
-        seg.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT, dp(40), CARD_GAP_INT));
-
-        tabStatus = segment("激活状态");
-        tabStatus.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { selectTab(0); }
-        });
-        seg.addView(tabStatus);
-
-        tabLog = segment("运行日志");
-        tabLog.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { selectTab(1); }
-        });
-        seg.addView(tabLog);
-        page.addView(seg);
-
         // ---- 内容区
         FrameLayout content = new FrameLayout(this);
-        content.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT, 0, CARD_GAP_INT));
+        content.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT, 0, cardGapInt));
         ((LinearLayout.LayoutParams) content.getLayoutParams()).weight = 1f;
 
         statusList = new LinearLayout(this);
         statusList.setOrientation(LinearLayout.VERTICAL);
         ScrollView statusScroll = new ScrollView(this);
-        statusScroll.setBackground(shape(cCard, CARD_RADIUS));
-        statusScroll.setPadding(dp(16), dp(16), dp(16), dp(16));
+        statusScroll.setBackground(isHarmony() ? null : shape(cCard, cardRadius));
+        statusScroll.setElevation(dp(isMiuix() ? 0 : 2));
+        statusScroll.setPadding(dp(isIos() ? 0 : 18), dp(isIos() ? 0 : 18),
+                dp(isIos() ? 0 : 18), dp(isIos() ? 8 : 18));
         statusScroll.addView(statusList, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         statusPane = statusScroll;
 
-        logView = text("", 11f, cText, "monospace");
+        logView = text("", 12f, cText, "monospace");
         logView.setTextIsSelectable(true);
         logView.setMovementMethod(new ScrollingMovementMethod());
         logView.setLineSpacing(dp(2), 1f);
         ScrollView logScroll = new ScrollView(this);
-        logScroll.setBackground(shape(cCard, CARD_RADIUS));
-        logScroll.setPadding(dp(16), dp(14), dp(16), dp(14));
+        logScroll.setBackground(isHarmony() ? glassSurface(cardRadius) : shape(cCard, cardRadius));
+        logScroll.setElevation(dp(isMiuix() ? 0 : 2));
+        logScroll.setPadding(dp(isIos() ? 16 : 18), dp(isIos() ? 16 : 18),
+                dp(isIos() ? 16 : 18), dp(isIos() ? 16 : 18));
         logScroll.addView(logView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         logPane = logScroll;
@@ -432,49 +572,54 @@ public class MainActivity extends Activity {
         return page;
     }
 
-    private static final int CARD_GAP_INT = 12;
-
     /**
-     * 状态卡 —— 完全照 KernelSU 的 StatusCard：
+     * 状态卡采用 HarmonyOS 蓝色系统渐变，完成后切换为绿色成功态：
      * 标题 22sp SemiBold / 版本 15sp / 模式 16sp Medium（贴底左），
      * 右下 110dp 圆环图标 offset(27dp, 31dp)，超出卡片被裁切。
      */
     private View buildStatusCard() {
         final FrameLayout card = new FrameLayout(this);
-        card.setBackground(ripple(cCard, CARD_RADIUS));
+        if (isMiuix() || isIos()) card.setBackground(ripple(cCard, cardRadius));
+        else card.setBackground(glassSurface(cardRadius));
         card.setClickable(true);
         card.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { refreshStatus(false); }
         });
         tilt(card);
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(112));
-        cardLp.topMargin = dp(CARD_GAP_INT);
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(isMiuix() ? 112 : (isIos() ? 104 : 148)));
+        cardLp.topMargin = dp(cardGapInt);
         card.setLayoutParams(cardLp);
+        if (isIos()) card.setElevation(dp(0));
+        else if (isHarmony()) card.setElevation(dp(2));
 
         // 右下角溢出的大圆环图标（被卡片边界裁切）
         ovIcon = new ImageView(this);
         ovIcon.setImageResource(R.drawable.ic_ring_check);
         ovIcon.setColorFilter(cOkRing);
-        FrameLayout.LayoutParams ilp = new FrameLayout.LayoutParams(dp(110), dp(110));
-        ilp.gravity = Gravity.END | Gravity.BOTTOM;
-        ilp.rightMargin = -dp(27);
-        ilp.bottomMargin = -dp(31);
+        int iconSize = isIos() ? 34 : (isHarmony() ? 112 : 110);
+        FrameLayout.LayoutParams ilp = new FrameLayout.LayoutParams(dp(iconSize), dp(iconSize));
+        ilp.gravity = isIos() ? Gravity.END | Gravity.CENTER_VERTICAL : Gravity.END | Gravity.BOTTOM;
+        ilp.rightMargin = isIos() ? dp(16) : (isHarmony() ? -dp(20) : -dp(27));
+        ilp.bottomMargin = isIos() ? 0 : (isHarmony() ? -dp(24) : -dp(31));
         ovIcon.setLayoutParams(ilp);
         card.addView(ovIcon);
 
         // 文字层
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setPadding(dp(16), dp(14), dp(16), dp(10));
+        column.setPadding(dp(16), dp(isIos() ? 14 : 16), dp(isIos() ? 56 : 16), dp(10));
         column.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         column.setGravity(Gravity.TOP);
 
-        ovTitle = text("正在检测…", 22f, cText, "sans-serif-medium");
+        ovTitle = text("正在检测…", isMiuix() ? 20f : (isIos() ? 22f : 26f),
+                isHarmony() && night ? Color.WHITE : cText, "sans-serif-medium");
         column.addView(ovTitle);
 
-        ovSummary = text("", 15f, cText2, "sans-serif");
+        ovSummary = text("", isIos() ? 14f : 15f,
+                isHarmony() && night ? 0xD9FFFFFF : cText2, "sans-serif");
         ovSummary.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         column.addView(ovSummary);
@@ -484,7 +629,8 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         column.addView(gap);
 
-        ovMode = text("", 16f, cText, "sans-serif-medium");
+        ovMode = text("", 16f, isHarmony() && night ? Color.WHITE : cText, "sans-serif-medium");
+        if (isIos()) ovMode.setVisibility(View.GONE);
         column.addView(ovMode);
         card.addView(column);
 
@@ -495,12 +641,23 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------- 底部导航
 
     private View buildBottomNav() {
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setBackgroundColor((isIos() || isHarmony()) ? Color.TRANSPARENT : cPage);
+        shell.setPadding(0, 0, 0, 0);
+
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setBackgroundColor(cPage);
+        nav.setBackground(isIos() ? glassSurface(30f)
+                : (isMiuix() ? null : glassSurface(32f)));
+        nav.setElevation(dp(isIos() ? 12 : (isHarmony() ? 8 : 0)));
+        if (isMiuix()) nav.setBackgroundColor(cPage);
+        if (Build.VERSION.SDK_INT >= 21) nav.setClipToOutline(true);
         nav.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(NAV_HEIGHT)));
-        nav.setPadding(dp(12), dp(6), dp(12), dp(6));
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(isIos() ? 68 : NAV_HEIGHT)));
+        if (isMiuix()) nav.setPadding(dp(12), dp(6), dp(12), dp(6));
+        else if (isIos()) nav.setPadding(dp(6), dp(2), dp(6), dp(2));
+        else nav.setPadding(dp(8), dp(3), dp(8), dp(3));
 
         navActivateItem = navItem(R.drawable.ic_nav_home, "激活");
         navActivateItem.setOnClickListener(new View.OnClickListener() {
@@ -518,67 +675,122 @@ public class MainActivity extends Activity {
         navActivateLabel = (TextView) navActivateItem.getChildAt(1);
         navSettingsIcon  = (ImageView) navSettingsItem.getChildAt(0);
         navSettingsLabel = (TextView) navSettingsItem.getChildAt(1);
-        return nav;
+        shell.addView(nav);
+        return shell;
     }
 
     private LinearLayout navItem(int icon, String label) {
         LinearLayout it = new LinearLayout(this);
         it.setOrientation(LinearLayout.VERTICAL);
-        it.setGravity(Gravity.CENTER);
+        it.setGravity(isMiuix() || isIos() ? Gravity.CENTER
+                : Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         it.setLayoutParams(new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.MATCH_PARENT, 1f));
         it.setClickable(true);
         it.setFocusable(true);
-        it.setBackground(ripple(0x00000000, 14f));
+        it.setBackground(ripple(0x00000000, isMiuix() ? 14f : (isIos() ? 0f : 18f)));
 
         ImageView iv = new ImageView(this);
         iv.setImageResource(icon);
-        iv.setLayoutParams(new LinearLayout.LayoutParams(dp(NAV_ICON), dp(NAV_ICON)));
+        int navIconSize = isIos() ? 23 : (isHarmony() ? 24 : (int) NAV_ICON);
+        LinearLayout.LayoutParams ivp = new LinearLayout.LayoutParams(dp(navIconSize), dp(navIconSize));
+        ivp.topMargin = dp(isMiuix() || isIos() ? 0 : 8);
+        iv.setLayoutParams(ivp);
         it.addView(iv);
 
-        TextView tv = text(label, NAV_LABEL_SP, cText3, "sans-serif-medium");
+        TextView tv = text(label, isIos() ? 11f : NAV_LABEL_SP, cText, "sans-serif-medium");
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.topMargin = dp(2);
+        if (isMiuix()) tlp.topMargin = dp(2);
+        else if (isIos()) tlp.topMargin = dp(3);
+        else tlp.bottomMargin = dp(8);
         tv.setLayoutParams(tlp);
         it.addView(tv);
+        it.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View view, MotionEvent event) {
+                int action = event.getActionMasked();
+                if (action == MotionEvent.ACTION_DOWN) {
+                    float pressedAlpha = view.isSelected() ? 0.5f : 0.6f;
+                    float baseAlpha = view.isSelected() ? 1f : 0.4f;
+                    animateNavAlpha(iv, tv, pressedAlpha * baseAlpha, 80);
+                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    animateNavAlpha(iv, tv, view.isSelected() ? 1f : 0.4f, 120);
+                }
+                return false;
+            }
+        });
         return it;
+    }
+
+    private void animateNavAlpha(ImageView icon, TextView label, float alpha, long duration) {
+        icon.animate().cancel();
+        label.animate().cancel();
+        PathInterpolator easing = new PathInterpolator(.2f, 0f, 0f, 1f);
+        icon.animate().alpha(alpha).setDuration(duration).setInterpolator(easing).start();
+        label.animate().alpha(alpha).setDuration(duration).setInterpolator(easing).start();
     }
 
     private void switchPage(int which) {
         boolean act = which == 0;
         currentPage = which;
-        pageActivate.setVisibility(act ? View.VISIBLE : View.GONE);
-        pageSettings.setVisibility(act ? View.GONE : View.VISIBLE);
-        navActivateIcon.setColorFilter(act ? cText : cText3);
-        navActivateLabel.setTextColor(act ? cText : cText3);
-        navSettingsIcon.setColorFilter(act ? cText3 : cText);
-        navSettingsLabel.setTextColor(act ? cText3 : cText);
+        View incoming = act ? pageActivate : pageSettings;
+        View outgoing = act ? pageSettings : pageActivate;
+        if (incoming.getVisibility() != View.VISIBLE) {
+            incoming.animate().cancel();
+            incoming.setVisibility(View.VISIBLE);
+            incoming.setAlpha(0f);
+            incoming.setTranslationX(dp(which > 0 ? 20 : -20));
+            incoming.animate().alpha(1f).translationX(0f).setDuration(280)
+                    .setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f)).start();
+        }
+        outgoing.animate().cancel();
+        outgoing.setVisibility(View.GONE);
+
+        int activeNav = isMiuix() ? cText : cAccent;
+        int inactiveNav = isMiuix() ? cText3 : cText2;
+        navActivateIcon.setColorFilter(act ? activeNav : inactiveNav);
+        navSettingsIcon.setColorFilter(act ? inactiveNav : activeNav);
+        navActivateItem.setSelected(act);
+        navSettingsItem.setSelected(!act);
+        if (!isMiuix() && !isIos()) {
+            navActivateLabel.setTypeface(Typeface.create("sans-serif", act ? Typeface.BOLD : Typeface.NORMAL));
+            navSettingsLabel.setTypeface(Typeface.create("sans-serif", act ? Typeface.NORMAL : Typeface.BOLD));
+        }
+        navActivateLabel.setTextColor(act ? activeNav : inactiveNav);
+        navSettingsLabel.setTextColor(act ? inactiveNav : activeNav);
+        int clear = 0x00000000;
+        navActivateItem.setBackground(isHarmony() && act ? ripple(cAccentContainer, 18f)
+                : ripple(clear, isMiuix() ? 14f : (isIos() ? 0f : 18f)));
+        navSettingsItem.setBackground(isHarmony() && !act ? ripple(cAccentContainer, 18f)
+                : ripple(clear, isMiuix() ? 14f : (isIos() ? 0f : 18f)));
+        animateNavAlpha(navActivateIcon, navActivateLabel, act ? 1f : (isMiuix() ? 0.55f : 0.4f), 180);
+        animateNavAlpha(navSettingsIcon, navSettingsLabel, act ? (isMiuix() ? 0.55f : 0.4f) : 1f, 180);
     }
 
     // --------------------------------------------------------------- 设置页
 
-    /** 设置页 —— 照 KernelSU：没有分组标题，直接一列 Card，Card 间距 12dp。 */
+    /** 设置页根据所选风格展示对应的表面与分组。 */
     private View buildSettingsPage() {
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(cPage);
+        scroll.setBackgroundColor(isHarmony() ? Color.TRANSPARENT : cPage);
         scroll.setFillViewport(true);
 
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(PAGE_PADDING), dp(18), dp(PAGE_PADDING), dp(28));
+        page.setPadding(dp(pagePadding), dp(isMiuix() ? 8 : 18), dp(pagePadding),
+                dp(isIos() || isHarmony() ? 96 : 28));
         scroll.addView(page, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView title = text("设置", TITLE_SP, cText, "sans-serif");
-        title.setPadding(dp(TITLE_PAD - PAGE_PADDING), 0, 0, 0);
-        title.setLayoutParams(lp(LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 0));
-        page.addView(title);
+        page.addView(buildHeader("设置", false));
 
-        // Card 1：外观
+        // 风格和系统深浅色彼此独立。
         LinearLayout g1 = card();
+        g1.addView(prefArrow(R.drawable.ic_display, "界面风格", styleLabel(),
+                new View.OnClickListener() {
+                    public void onClick(View v) { chooseStyle(); }
+                }));
         g1.addView(prefArrow(R.drawable.ic_palette, "深色模式", themeLabel(),
                 new View.OnClickListener() {
                     public void onClick(View v) { chooseTheme(); }
@@ -604,7 +816,7 @@ public class MainActivity extends Activity {
                 }));
         page.addView(g3);
 
-        // Card 4：关于（KernelSU 的 InfoCard 样式）
+        // 设备信息
         LinearLayout g4 = card();
         g4.setPadding(dp(16), dp(16), dp(16), dp(16));
         g4.addView(infoRow(R.drawable.ic_tag, "版本", appVersion(), true));
@@ -622,6 +834,85 @@ public class MainActivity extends Activity {
         if ("dark".equals(m)) return "深色";
         if ("light".equals(m)) return "浅色";
         return "跟随系统";
+    }
+
+    private String styleLabel() {
+        if (isIos()) return "iOS";
+        if (isHarmony()) return "HarmonyOS";
+        return "Miuix";
+    }
+
+    private void chooseStyle() {
+        final String[] labels = {"Miuix", "iOS", "HarmonyOS"};
+        final String[] values = {"miuix", "ios", "harmony"};
+        int selected = isIos() ? 1 : (isHarmony() ? 2 : 0);
+        new AlertDialog.Builder(this).setTitle("界面风格")
+                .setSingleChoiceItems(labels, selected, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        prefs().edit().putString(KEY_STYLE, values[which]).apply();
+                        dialog.dismiss();
+                        recreate();
+                    }
+                }).setNegativeButton("取消", null).show();
+    }
+
+    /** 根据所选风格调整标题栏尺寸，保留状态 / 日志快捷切换。 */
+    private View buildHeader(String titleText, boolean showRefresh) {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(isIos() ? Gravity.BOTTOM : Gravity.CENTER_VERTICAL);
+        bar.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(isMiuix() ? (showRefresh ? 52 : 48)
+                        : (isIos() ? (showRefresh ? 96 : 78) : (showRefresh ? 68 : 64)))));
+        if (isIos()) bar.setPadding(0, 0, 0, dp(8));
+
+        TextView title = text(titleText, isIos() ? 34f : titleSp, cText, "sans-serif");
+        title.setTypeface(Typeface.create(isMiuix() ? "sans-serif-medium" : "sans-serif",
+                isMiuix() ? Typeface.NORMAL : Typeface.BOLD));
+        if (isIos()) title.setGravity(Gravity.BOTTOM);
+        title.setLayoutParams(new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        bar.addView(title);
+
+        if (showRefresh) {
+            headerLogAction = text("日志", isIos() ? 16f : 14f, cAccent, "sans-serif-medium");
+            headerLogAction.setGravity(Gravity.CENTER);
+            headerLogAction.setPadding(dp(isIos() ? 8 : 12), 0, dp(isIos() ? 8 : 12), 0);
+            headerLogAction.setBackground(isIos() ? glassSurface(20f) : ripple(cSecFill, 18f));
+            headerLogAction.setClickable(true);
+            headerLogAction.setFocusable(true);
+            headerLogAction.setContentDescription("查看运行日志");
+            LinearLayout.LayoutParams logLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(36));
+            logLp.leftMargin = dp(8);
+            headerLogAction.setLayoutParams(logLp);
+            headerLogAction.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    selectTab(statusPane.getVisibility() == View.VISIBLE ? 1 : 0);
+                }
+            });
+            bar.addView(headerLogAction);
+
+            FrameLayout action = new FrameLayout(this);
+            action.setContentDescription("重新检测状态");
+            action.setClickable(true);
+            action.setFocusable(true);
+            action.setBackground(isIos() ? glassSurface(20f) : ripple(cSecFill, 20f));
+            LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(dp(40), dp(40));
+            actionLp.leftMargin = dp(8);
+            action.setLayoutParams(actionLp);
+
+            ImageView refresh = new ImageView(this);
+            refresh.setImageResource(R.drawable.ic_refresh);
+            refresh.setColorFilter(isIos() ? cAccent : cText);
+            action.addView(refresh, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
+            action.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { refreshAll(false); }
+            });
+            bar.addView(action);
+        }
+        return bar;
     }
 
     private String appVersion() {
@@ -664,14 +955,15 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Miuix Card：16dp 圆角，卡片之间 12dp。 */
+    /** 圆角分组卡片，卡片之间保留清晰留白。 */
     private LinearLayout card() {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setBackground(shape(cCard, CARD_RADIUS));
+        c.setBackground(isHarmony() ? glassSurface(16f) : shape(cCard, cardRadius));
+        c.setElevation(dp(isMiuix() ? 0 : 2));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        p.topMargin = dp(CARD_GAP_INT);
+        p.topMargin = dp(cardGapInt);
         c.setLayoutParams(p);
         return c;
     }
@@ -713,7 +1005,7 @@ public class MainActivity extends Activity {
         return row;
     }
 
-    /** Miuix ArrowPreference：图标 + 标题/副标题 + 右侧箭头。 */
+    /** 设置列表项：图标 + 标题/副标题 + 右侧箭头。 */
     private View prefArrow(int icon, String title, String summary, View.OnClickListener click) {
         LinearLayout row = prefBase(icon, title, summary, true);
         ImageView ar = new ImageView(this);
@@ -721,21 +1013,41 @@ public class MainActivity extends Activity {
         ar.setColorFilter(cText3);
         ar.setLayoutParams(new LinearLayout.LayoutParams(dp(18), dp(18)));
         row.addView(ar);
-        row.setBackground(ripple(cCard, CARD_RADIUS));
+        row.setBackground(ripple(isHarmony() ? harmonyGlassColor() : cCard, cardRadius));
         row.setOnClickListener(click);
         return row;
     }
 
-    /** Miuix SwitchPreference：图标 + 标题/副标题 + 右侧开关。 */
+    /** 设置列表项：图标 + 标题/副标题 + 右侧开关。 */
     private View prefSwitch(int icon, String title, String summary,
                             boolean checked, final OnToggle cb) {
         LinearLayout row = prefBase(icon, title, summary, false);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(52), dp(32));
         sp.leftMargin = dp(12);
-        View sw = mzSwitch(checked, cb);
+        View sw;
+        if (isIos()) {
+            CupertinoSwitch cupertino = new CupertinoSwitch(this);
+            cupertino.setSwitchWidth(dp(52));
+            cupertino.setSwitchHeight(dp(32));
+            cupertino.setTrackOnColor(cAccent);
+            cupertino.setTrackOffColor(blend(cCard, cText3, 0.38f));
+            cupertino.setSliderColor(Color.WHITE);
+            cupertino.setSliderShadowEnabled(true);
+            cupertino.setChecked(checked);
+            cupertino.setOnStateChangeListener(new CupertinoSwitch.OnStateChangeListener() {
+                public void onChanged(CupertinoSwitch view, boolean on) {
+                    if (cb != null) cb.onToggle(on);
+                }
+                public void onSwitchOn(CupertinoSwitch view) { }
+                public void onSwitchOff(CupertinoSwitch view) { }
+            });
+            sw = cupertino;
+        } else {
+            sw = mzSwitch(checked, cb);
+        }
         sw.setLayoutParams(sp);
         row.addView(sw);
-        row.setBackground(ripple(cCard, CARD_RADIUS));
+        row.setBackground(ripple(isHarmony() ? harmonyGlassColor() : cCard, cardRadius));
         return row;
     }
 
@@ -819,27 +1131,23 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------------- 分段控件
-
-    private TextView segment(String s) {
-        TextView t = text(s, 14f, cText2, "sans-serif-medium");
-        t.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-        t.setLayoutParams(p);
-        t.setClickable(true);
-        t.setFocusable(true);
-        return t;
-    }
+    // ------------------------------------------------------------- 内容切换
 
     private void selectTab(int which) {
         boolean status = which == 0;
-        tabStatus.setTextColor(status ? cText : cText2);
-        tabStatus.setBackground(status ? shape(cSegPill, 16f) : ripple(0x00000000, 16f));
-        tabLog.setTextColor(status ? cText2 : cText);
-        tabLog.setBackground(status ? ripple(0x00000000, 16f) : shape(cSegPill, 16f));
-        statusPane.setVisibility(status ? View.VISIBLE : View.GONE);
-        logPane.setVisibility(status ? View.GONE : View.VISIBLE);
+        headerLogAction.setText(status ? "日志" : "状态");
+        headerLogAction.setContentDescription(status ? "查看运行日志" : "返回激活状态");
+        View incoming = status ? statusPane : logPane;
+        View outgoing = status ? logPane : statusPane;
+        if (incoming.getVisibility() != View.VISIBLE) {
+            incoming.animate().cancel();
+            incoming.setAlpha(0f);
+            incoming.setVisibility(View.VISIBLE);
+            incoming.animate().alpha(1f).setDuration(180)
+                    .setInterpolator(new PathInterpolator(.2f, 0f, 0f, 1f)).start();
+        }
+        outgoing.animate().cancel();
+        outgoing.setVisibility(View.GONE);
     }
 
     // -------------------------------------------------------- 状态清单渲染
@@ -887,50 +1195,80 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 全部激活 → 状态卡切成 KernelSU 那种绿卡；否则中性卡片。
+     * 全部激活 → 状态卡切成绿色渐变；未完成时使用蓝色系统卡。
      * 同时：全部激活后「一键激活」整行隐藏。
      */
     private void applyOverview(boolean allOk, int tint) {
-        overviewCard.setBackground(ripple(allOk ? cOkCard : cCard, CARD_RADIUS));
-        ovTitle.setTextColor(allOk ? cOkTitle : cText);
-        ovSummary.setTextColor(allOk ? cOkSub : cText2);
-        ovMode.setTextColor(allOk ? cOkMode : cText3);
+        int successEnd = blend(cOkCard, Color.WHITE, night ? 0.06f : 0.08f);
+        if (isMiuix()) {
+            overviewCard.setBackground(ripple(allOk ? cOkCard : cCard, cardRadius));
+            ovTitle.setTextColor(allOk ? cOkTitle : cText);
+            ovSummary.setTextColor(allOk ? cOkSub : cText2);
+            ovMode.setTextColor(allOk ? cOkMode : cText3);
+        } else if (isIos()) {
+            overviewCard.setBackground(ripple(cCard, cardRadius));
+            ovTitle.setTextColor(allOk ? cSuccess : cText);
+            ovSummary.setTextColor(cText2);
+            ovMode.setTextColor(cText3);
+        } else {
+            overviewCard.setBackground(glassSurface(cardRadius));
+            ovTitle.setTextColor(allOk ? cSuccess : cText);
+            ovSummary.setTextColor(night ? 0xD9FFFFFF : cText2);
+            ovMode.setTextColor(night ? 0xD9FFFFFF : cText3);
+        }
         ovMode.setText(allOk ? "late-load" : "");
         ovIcon.setImageResource(allOk ? R.drawable.ic_ring_check : R.drawable.ic_ring_close);
         ovIcon.setColorFilter(allOk ? cOkRing : tint);
 
         btnGo.setVisibility(allOk ? View.GONE : View.VISIBLE);
         LinearLayout.LayoutParams rlp = (LinearLayout.LayoutParams) btnRow.getLayoutParams();
-        int want = dp(CARD_GAP_INT);
+        int want = dp(cardGapInt);
         if (rlp.topMargin != want) {
             rlp.topMargin = want;
             btnRow.setLayoutParams(rlp);
         }
     }
 
-    /** 清单行 —— KernelSU InfoCard 的 InfoText：图标 + 标题 + 内容。 */
+    /** 状态清单行：图标 + 标题 + 说明 + 状态。 */
     private View statusRow(String name, String detail, boolean ok, boolean bottomPad) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rlp.bottomMargin = dp(bottomPad ? 20 : 0);
+        rlp.bottomMargin = dp(isHarmony() ? 8 : (isMiuix() && bottomPad ? 20 : 0));
         row.setLayoutParams(rlp);
+        if (isIos()) row.setPadding(dp(16), dp(12), dp(16), dp(12));
+        else if (isHarmony()) {
+            row.setPadding(dp(14), dp(12), dp(14), dp(12));
+            row.setBackground(ripple(isHarmony() ? harmonyGlassColor() : cCard, 14f));
+            row.setElevation(dp(1));
+        }
 
         ImageView iv = new ImageView(this);
         iv.setImageResource(ok ? R.drawable.ic_ring_check : R.drawable.ic_ring_close);
         iv.setColorFilter(ok ? cSuccess : cDanger);
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(24), dp(24));
+        int statusIconSize = isHarmony() ? 20 : 24;
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(statusIconSize), dp(statusIconSize));
         ilp.rightMargin = dp(12);
-        iv.setLayoutParams(ilp);
-        row.addView(iv);
+        if (isHarmony()) {
+            FrameLayout iconBadge = new FrameLayout(this);
+            iconBadge.setBackground(shape(blend(ok ? cSuccess : cDanger, cCard, night ? .78f : .88f), 22f));
+            iconBadge.addView(iv, new FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER));
+            ilp = new LinearLayout.LayoutParams(dp(38), dp(38));
+            ilp.rightMargin = dp(12);
+            iconBadge.setLayoutParams(ilp);
+            row.addView(iconBadge);
+        } else {
+            iv.setLayoutParams(ilp);
+            row.addView(iv);
+        }
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setLayoutParams(new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        col.addView(text(name, 17f, cText, "sans-serif-medium"));
+        col.addView(text(name, isHarmony() ? 16f : 17f, cText, "sans-serif-medium"));
 
         TextView dt = text(detail, 14f, cText2, "sans-serif");
         dt.setMaxLines(1);
@@ -940,10 +1278,22 @@ public class MainActivity extends Activity {
         col.addView(dt);
         row.addView(col);
 
-        TextView state = text(ok ? "已激活" : "未激活", 14f,
+        TextView state = text(ok ? "已激活" : "未激活", isIos() ? 13f : 14f,
                 ok ? cSuccess : cDanger, "sans-serif-medium");
         row.addView(state);
-        return row;
+        if (!isIos()) return row;
+        LinearLayout groupRow = new LinearLayout(this);
+        groupRow.setOrientation(LinearLayout.VERTICAL);
+        groupRow.addView(row);
+        if (bottomPad) {
+            View divider = new View(this);
+            divider.setBackgroundColor(blend(cCard, cText, night ? .24f : .12f));
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+            dlp.leftMargin = dp(52);
+            groupRow.addView(divider, dlp);
+        }
+        return groupRow;
     }
 
     // -------------------------------------------------------------- 线程/UI

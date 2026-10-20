@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="harmony_page_bg">#101318</color>
+    <color name="harmony_card_bg">#1C222C</color>
+    <color name="harmony_text_primary">#F5F7FA</color>
+    <color name="harmony_text_secondary">#AAB4C3</color>
+    <color name="harmony_text_tertiary">#7D8999</color>
+    <color name="harmony_accent">#5DD784</color>
+    <color name="harmony_on_accent">#15321F</color>
+    <color name="harmony_accent_container">#254332</color>
+    <color name="harmony_success">#5DD784</color>
+    <color name="harmony_danger">#F97066</color>
+    <color name="harmony_secondary_fill">#34394D</color>
+    <color name="harmony_secondary_text">#E4EAF2</color>
+    <color name="harmony_idle_start">#38694A</color>
+    <color name="harmony_idle_end">#284C55</color>
+    <color name="harmony_ok_card">#2C6949</color>
+    <color name="harmony_ok_title">#FFFFFF</color>
+    <color name="harmony_ok_sub">#E1FFF5</color>
+    <color name="harmony_ok_ring">#FFFFFF</color>
+    <color name="harmony_ok_mode">#E1FFF5</color>
+</resources>

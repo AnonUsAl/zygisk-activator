@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ios_page_bg">#F2F2F7</color>
+    <color name="ios_card_bg">#FFFFFF</color>
+    <color name="ios_text_primary">#1C1C1E</color>
+    <color name="ios_text_secondary">#6D6D72</color>
+    <color name="ios_text_tertiary">#8E8E93</color>
+    <color name="ios_accent">#007AFF</color>
+    <color name="ios_on_accent">#FFFFFF</color>
+    <color name="ios_accent_container">#E5F0FF</color>
+    <color name="ios_success">#34C759</color>
+    <color name="ios_danger">#FF3B30</color>
+    <color name="ios_secondary_fill">#E5E5EA</color>
+    <color name="ios_secondary_text">#1C1C1E</color>
+    <color name="ios_idle_start">#EAF3FF</color>
+    <color name="ios_idle_end">#DCEBFF</color>
+    <color name="ios_ok_card">#DFFAE4</color>
+    <color name="ios_ok_title">#124A22</color>
+    <color name="ios_ok_sub">#3A7A50</color>
+    <color name="ios_ok_ring">#36D167</color>
+    <color name="ios_ok_mode">#1E5C34</color>
+</resources>
