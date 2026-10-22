@@ -197,6 +197,46 @@ kernelsu 217088 3 - Live 0x0000000000000000 (O)
 
 ---
 
+## 已知会让 zygote 秒崩的模块（实测，务必避开）
+
+### Nohello v0.0.7（`zygisk_nohello`）
+
+2026-10-22 实测：启用后 zygote 启动 1 秒内 SIGSEGV：
+
+```
+signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0
+Cause: null pointer dereference
+Process uptime: 1s
+#00 pc 0x306e8  /data/adb/modules/zygisk_nohello/zygisk/arm64-v8a.so
+#01 pc 0x61cc8  /data/adb/modules/zygisksu/lib64/libzygisk.so
+#02 pc 0x69890  /data/adb/modules/zygisksu/lib64/libzygisk.so
+```
+
+**连锁后果**：zygote 死 → system_server 与桌面一起陪葬 → 桌面进入
+`InputChannel is not initialized` 的崩溃循环（`NavStubView.<init>` → `registerInputConsumer` → `InputEventReceiver.nativeInit`），
+严重时整机重启、临时 root 丢失。
+
+**排查时的坑**：桌面崩溃的表象很像「Vector 的 system_server hook 弄坏了 WMS」，容易误判。
+正确的判断顺序是——先看 `/data/tombstones/tombstone_*` 里有谁的 so，再看 `znctl status` 是否正常，
+最后才怀疑 Xposed 模块。本例中 Vector 及 16 个 `system` 作用域模块全部无罪。
+
+**环境**：Android 16 (SDK 36) + Zygisk Next 1.5.2 + KernelSU LKM + Vector 2.2
+
+**结论**：这套组合下**不要启用 Nohello**。需要隐藏 root 时改用其他方案，或等模块适配新 Zygisk Next。
+
+处置与验证：
+
+```sh
+adb shell su -c 'touch /data/adb/modules/zygisk_nohello/disable'
+adb shell su -c 'rm -f /data/adb/nohello/whitelist'
+adb shell su -c '/data/adb/ksu/bin/ksud module install "/sdcard/Download/Zygisk Next-v1.5.2.zip"'
+adb shell su -c '/data/adb/ksu/bin/ksud post-fs-data'
+# 之后 modules_info 里不应再出现 zygisk_nohello
+adb shell su -c 'cat /data/adb/zygisksu/modules_info'
+```
+
+---
+
 ## 备查
 
 - `znctl` 即 `/data/adb/modules/zygisksu/bin/zygiskd`，软链在 `/data/adb/ksu/bin/znctl`
