@@ -21,8 +21,13 @@ KernelSU 的 late-load 模式下，内核模块能挂、`su` 能用，但 **Zygi
 | 功能 | 说明 |
 |---|---|
 | 一键激活 | 自动把脚本写到 `/data/adb/`，并用 root 跑完整修复流程 |
-| Vector daemon 守护 | 第 5 步检测 `vectord` 是否在跑，没起就自动用 `ksud services` 拉起 —— `service.sh` 里的 `unshare --propagation` 只有 KernelSU 自带 busybox 认得，普通 su 环境解析到 toybox 会直接失败 |
-| 状态清单 | 8 项逐条体检：root / 脚本 / zn-daemon / zygote 接管 / Zygisk 模块加载 / **vectord** / Vector / 注入，一眼看出哪个没起来 |
+| 有害模块预检 | 激活前先查已知会让 zygote 秒崩的模块（如 `zygisk_nohello`），启用即中止 —— 实测它会让 zygote 启动 1 秒内 SIGSEGV，连带 system_server 与桌面崩溃 |
+| sepolicy 应用 | 显式 `ksud sepolicy apply` Vector 的 `sepolicy.rule`。late-load 模式下 post-fs-data 可能跳过它，缺了会让管理器首页显示「Vector 异常」 |
+| 等待系统稳定 | zygote 重启后轮询 `boot_completed` + `system_server` + 桌面进程，都到位才继续。**在系统未稳时动 daemon 会把 framework 拖崩、触发整机重启并丢失临时 root** |
+| daemon 单例治理 | 检测 vectord 实例数，多实例先清再重建（重复 `ksud services` 会产生多个实例互相抢 binder） |
+| dex2oat 兼容 | Android 14+ 的 `dex2oat` 在 APEX 里、`/system/bin/dex2oat` 已不存在，Vector 的 wrapper 挂不上会判 `Dex2oatWrapperBroken`。脚本自动设 `dalvik.vm.dex2oat-flags=--inline-max-code-units=0` 让健康检查通过 |
+| Vector daemon 守护 | 第 5 步检测 `vectord` 是否在跑，没起就用 `ksud services` 拉起 —— `service.sh` 里的 `unshare --propagation` 只有 KernelSU 自带 busybox 认得，普通 su 环境解析到 toybox 会直接失败 |
+| 状态清单 | 10 项逐条体检：root / 有害模块 / 脚本 / zn-daemon / zygote 接管 / Zygisk 模块加载 / vectord / dex2oat / Vector / 注入 |
 | 运行日志 | 修复过程实时可见、可复制、可清空 |
 | 设置 | 界面风格（Miuix/iOS/HarmonyOS）、深色模式（跟随系统/浅色/深色）、打开时自动检测、清空日志 |
 

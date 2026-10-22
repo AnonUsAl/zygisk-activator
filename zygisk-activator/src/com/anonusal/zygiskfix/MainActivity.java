@@ -104,11 +104,13 @@ public class MainActivity extends Activity {
     /** 清单显示顺序与中文名。key 必须和 zygisk-status.sh 输出的一致。 */
     private static final String[][] ITEMS = {
             {"root",   "KernelSU Root"},
+            {"harmful","有害模块"},
             {"script", "修复脚本"},
             {"zn",     "Zygisk Next 服务"},
             {"zygote", "Zygote 接管"},
             {"znmod",  "Zygisk 模块加载"},
             {"vectord","Vector 守护进程"},
+            {"dex2oat","dex2oat 兼容"},
             {"vector", "Vector 框架"},
             {"inject", "Vector 注入应用"}
     };
