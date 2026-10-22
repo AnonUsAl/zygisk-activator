@@ -108,6 +108,7 @@ public class MainActivity extends Activity {
             {"zn",     "Zygisk Next 服务"},
             {"zygote", "Zygote 接管"},
             {"znmod",  "Zygisk 模块加载"},
+            {"vectord","Vector 守护进程"},
             {"vector", "Vector 框架"},
             {"inject", "Vector 注入应用"}
     };

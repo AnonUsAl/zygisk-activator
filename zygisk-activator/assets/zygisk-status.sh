@@ -54,6 +54,17 @@ else
   esac
 fi
 
+# ---------------------------------------------------------------- Vector daemon
+# vectord 不会自己起来：service.sh 里的 unshare 只有 KernelSU 自带 busybox 认得
+# --propagation，普通 su 环境解析到 toybox 的 unshare 会报 Unknown option。
+# 没有 vectord 时 Vector CLI 一律 Connection refused，所有模块静默失效。
+VDP=$(pidof vectord 2>/dev/null)
+if [ -n "$VDP" ]; then
+  echo "vectord|1|vectord PID $VDP"
+else
+  echo "vectord|0|vectord 未运行 · 跑 ksud services 拉起"
+fi
+
 # ---------------------------------------------------------------- Vector 框架
 VJ=$("$LSPCLI" status --json 2>/dev/null)
 VN=$(echo "$VJ" | grep 'Enabled Modules' | head -1 | tr -dc '0-9')

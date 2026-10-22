@@ -44,9 +44,11 @@ adb shell "setprop ctl.restart zygote_secondary"
 |---|---|---|
 | ZN 状态 | `su -c 'znctl status'` | `zygote_states:2`、`inject_state:1`、`modules_with_issue:0` |
 | 已加载模块 | 同上 | `modules64:2,zygisk_tcqt,zygisk_vector` |
+| Zygisk 侧加载表 | `su -c 'cat /data/adb/zygisksu/modules_info'` | 每个模块一行（`zygisk_vector 64 fd=9 ...`）；`maps` 里查不到是正常的，见下文 |
 | 管理器显示 | `grep -m1 description /data/adb/modules/zygisksu/module.prop` | `[✅zygote, ✅zygote_secondary, Root: ✅KernelSU (32601), ZL]` |
-| Vector 状态 | `su -c '/data/adb/lspd/cli status --json'` | `Enabled Modules: 51`（数量随你启用数变化） |
-| 真实注入 | 查看 `/data/adb/lspd/log/modules_*.log` | 出现 `VectorLegacyBridge` 的 hook 记录 |
+| **Vector daemon** | `ps -A \| grep vectord` | 有 `vectord` 进程；没有就 `ksud services` |
+| Vector 状态 | `su -c '/data/adb/lspd/cli status --json'` | `Framework Version` 有值、`Enabled Modules: N`；报 `Connection refused` = daemon 没起 |
+| 真实注入 | `grep -a "Loaded module" /data/adb/lspd/log/verbose_*.log \| tail` | 出现 `Loaded module xxx successfully` |
 
 ---
 
@@ -61,6 +63,140 @@ adb shell "setprop ctl.restart zygote_secondary"
 
 ---
 
+## Vector daemon 掉线了怎么救（2026-10-22 实测）
+
+**症状：** 模块全都不生效，`su -c '/data/adb/lspd/cli status'` 报
+
+```
+Error: Socket Failure: Connection refused
+```
+
+`ps -A | grep vectord` 查不到进程（注意进程名叫 **`vectord`**，不是 lspd / daemon）。
+
+### 一行修复
+
+```sh
+adb shell su -c '/data/adb/ksud services'
+```
+
+约 5 秒后 `vectord` 出现，`cli status` 恢复。实测输出：
+
+```
+Framework Version: 2.2
+Version Code: 3112
+API Version: 102
+Enabled Modules: 69
+```
+
+### 为什么别的办法都起不来（都试过）
+
+| 方式 | 结果 |
+|---|---|
+| `su -c 'sh /data/adb/modules/zygisk_vector/service.sh'` | 无效。脚本里 `unshare --propagation slave -m` 报 `Unknown option 'propagation'` —— 设备的 `/system/bin/unshare` 是 **toybox 0.8.12，只支持 `-i -m -n -p -u -U -r`** |
+| `unshare -m ./daemon` | 静默退出，无任何输出（daemon 内部 `exec ... >/dev/null 2>&1` 把错误吞了） |
+| `/data/adb/ksu/bin/busybox unshare ...` | 同样静默退出 |
+| 直接前台跑 `app_process ... VectorDaemon` | 15 秒无输出 —— 缺 zygisk 侧 binder 环境，单独起不来 |
+| **`ksud services`** | ✅ 唯一有效。KernelSU 的 service 阶段 PATH 里有 `/data/adb/ksu/bin/busybox`，它提供的 `unshare` **支持 `--propagation`** |
+
+**结论：** `service.sh` 本身是对的，错的是在普通 su 环境下 `unshare` 解析到了 toybox。只有走 KernelSU 的 service 触发才能拿到 busybox 版本。
+
+### 什么操作会导致 daemon 掉线
+
+- **`ksud soft-reboot`** —— 实测会杀掉 `vectord` 且**不会自动拉起**，之后必须补一条 `ksud services`
+- 直接 `kill` 掉 vectord 自然也会，同理
+
+---
+
+## 模块「enabled」但完全不生效怎么查
+
+`cli modules ls` 显示 `enabled` **不等于**真的在 hook。按下面顺序查：
+
+### 1. 日志里有没有真加载
+
+```sh
+adb shell "su -c 'ls -t /data/adb/lspd/log/verbose_* | head -1'"
+adb shell "su -c 'grep -a \"Loading module\\|Loaded module\" /data/adb/lspd/log/verbose_xxx.log | tail'"
+```
+
+有 `Loaded module xxx successfully` 才算加载成功。只有 `Loading` 没有 `Loaded` = 加载中途抛异常（日志里紧跟 `E/VectorLegacyBridge`）。
+
+### 2. 模块的 scope 是不是空的（最容易踩）
+
+Vector 只按**数据库里的 scope 记录**决定往哪些进程注入。有些模块在 APK 里声明了固定作用域：
+
+```
+META-INF/xposed/module.prop   →  staticScope=true
+META-INF/xposed/scope.list    →  每行一个包名
+```
+
+对这类模块：
+
+- `vector-cli scope add <模块> <包名>/0` 会直接报错
+  `Error: ... fixes its scope in module.prop, so xxx cannot be added. It claims: ...`
+- **但 Vector 不会把这个声明写进数据库** → db 里 scope 为空 → 该模块永远不注入
+
+查证：
+
+```sh
+# 拉 db 三件套到本地用 sqlite 查（只看 scope 表）
+select mid from modules where module_pkg_name='<模块包名>';
+select * from scope where mid=<mid>;      -- 空 = 没戏
+```
+
+解法 —— **用 `scope set` 整体覆盖，绕过 staticScope 锁**：
+
+```sh
+adb shell su -c '/data/adb/lspd/cli scope set <模块包名> <目标包名>/0 <另一个包名>/0'
+```
+
+实测有效：`scope set` 成功写入后，软重启即注入（日志出现 `Loaded module ... successfully`）。
+
+> `scope add` 会被拒，`scope set` 能过 —— 这两者的检查逻辑不一样。
+
+### 3. Zygisk 模块不能用 `maps` 判断加载情况
+
+Zygisk 的 so 是通过 **memfd** 加载的，`/proc/<pid>/maps` 里不会出现模块的原始路径，grep 模块名永远是 0 条。这**不代表没加载**。
+
+要确认 Zygisk 侧加载了什么，看：
+
+```sh
+adb shell su -c 'cat /data/adb/zygisksu/modules_info'
+```
+
+输出形如：
+
+```
+zygisk_tcqt    64 fd=8  dev=fe:3d ino=00814889 sz=421888
+zygisk_vector  64 fd=9  ...
+zygisk_nohello 64 fd=10 ...
+```
+
+有记录 = 已加载进 zygote。
+
+---
+
+## LKM 形态的固有代价：`/proc/modules` 对任何 app 可见
+
+这是 late-load / LKM 方案**没法用软件绕开**的一点，但遇到时容易误判成「模块装坏了」。
+
+```sh
+$ adb shell cat /proc/modules | grep kernelsu
+kernelsu 217088 3 - Live 0x0000000000000000 (O)
+```
+
+- `/proc/modules` 权限是 `-r--r--r--`，**任何 app 都能读**
+- LKM 模式（`insmod kernelsu.ko`）下，`kernelsu` 在模块列表里**实名可见**
+- Nohello / Shamiko / HMA 这类隐藏模块工作在**文件与挂载层**（藏 su、藏 `/data/adb/modules`、藏 mount 点），**改不了内核 `/proc` 的输出**
+- 结果：带加固壳（爱加密、网易易盾 VMP 等）的应用扫一眼 `open("/proc/modules")` 就会判定环境异常，直接自杀式崩溃
+
+实测案例：`cn.android.sia.exitentrypermit`（移民局 12367，易盾 VMP）在 root 下启动 3～6 秒必崩，`sp=0 / lr=0 / pc=0x1f4`；同一台机器不 root 时正常运行。Nohello 白名单、denylist、重装全部无效。
+
+**根治只有换 root 形态**：把 KernelSU 编进 boot.img（内核集成模式），那种情况下 `kernelsu` 不存在于 `/proc/modules`。代价是 root 不再随重启消失。
+
+> 顺带一个坑：Nohello 的 `/data/adb/nohello/whitelist` **用空文件创建时会把工作模式切成白名单**，而空名单 = 一个都不隐藏。想要全局隐藏就不要创建这个文件（默认黑名单模式）。
+
+---
+
 ## 备查
 
 - `znctl` 即 `/data/adb/modules/zygisksu/bin/zygiskd`，软链在 `/data/adb/ksu/bin/znctl`
@@ -69,4 +205,6 @@ adb shell "setprop ctl.restart zygote_secondary"
 - 手动起 vectord（`unshare` 必须用 busybox，toybox 不支持 `--propagation`）：
   `busybox setsid busybox unshare --propagation slave -m /data/adb/modules/zygisk_vector/daemon --system-server-max-retry=3`
 - `/data/adb/zygisksu/.abort_msg` 存在时 daemon 会拒绝启动，需先改名（不要删）
-- 软重启（`ksud soft-reboot`）**只重跑 `service` 阶段，不会重跑 `post-fs-data`** —— 对本问题无效
+- 软重启（`ksud soft-reboot`）**只重跑 `service` 阶段，不会重跑 `post-fs-data`** —— 对「激活」无效；
+  而且实测它**会杀掉 `vectord` 且不自动拉起**，跑完 Vector 反而从「已激活」变成「连不上」，必须补一条 `ksud services`
+- 只重启 framework 而不动内核：`setprop ctl.restart zygote`（已实测两次，LKM 下 **root 完整保留**，`kernelsu.ko` 仍在 `/proc/modules`，Vector daemon 会自动检测 `System Server died! Clearing caches and re-injecting...` 并重新注入 system_server）

@@ -21,7 +21,8 @@ KernelSU 的 late-load 模式下，内核模块能挂、`su` 能用，但 **Zygi
 | 功能 | 说明 |
 |---|---|
 | 一键激活 | 自动把脚本写到 `/data/adb/`，并用 root 跑完整修复流程 |
-| 状态清单 | 7 项逐条体检：root / 脚本 / zn-daemon / zygote 接管 / Zygisk 模块加载 / Vector / 注入，一眼看出哪个没起来 |
+| Vector daemon 守护 | 第 5 步检测 `vectord` 是否在跑，没起就自动用 `ksud services` 拉起 —— `service.sh` 里的 `unshare --propagation` 只有 KernelSU 自带 busybox 认得，普通 su 环境解析到 toybox 会直接失败 |
+| 状态清单 | 8 项逐条体检：root / 脚本 / zn-daemon / zygote 接管 / Zygisk 模块加载 / **vectord** / Vector / 注入，一眼看出哪个没起来 |
 | 运行日志 | 修复过程实时可见、可复制、可清空 |
 | 设置 | 界面风格（Miuix/iOS/HarmonyOS）、深色模式（跟随系统/浅色/深色）、打开时自动检测、清空日志 |
 
@@ -86,6 +87,12 @@ su -c "sh /data/adb/fix-zygisk.sh"
 - 内存 root 每次重启都会丢，需要先用提权工具重新拿到 root，再点「一键激活」
 - 第 3 步会重启 zygote：屏幕黑一下、所有 App 重启，属正常现象
 - 需要设备上已有 Zygisk Next 的模块 zip（默认在 `/sdcard/Download/`），脚本会按修改时间自动挑最新的那个
+- **`ksud soft-reboot` 不要用来干这事**：它只重跑 `service` 阶段、不重跑 `post-fs-data`（激活无效），而且实测会杀掉 `vectord` 且不自动拉起，跑完 Vector 反而从「已激活」变成「连不上」
+- 只想重启 framework 又不想动内核（保住内存 root）：`setprop ctl.restart zygote`，LKM 下 root 不丢
+- **模块显示 enabled 却不生效**：先查 `verbose_*.log` 有没有 `Loaded module xxx successfully`，再查该模块的 scope 是否为空 —— `staticScope=true` 的模块只能用 `scope set` 覆盖，`scope add` 会被拒
+- LKM 形态下 `kernelsu` 在 `/proc/modules` 里对任何 app 可见，Nohello / Shamiko 这类隐藏模块工作在文件与挂载层，**盖不住内核 `/proc` 输出** —— 带加固壳的 App（爱加密、易盾 VMP）会因此直接崩溃，这不是激活没做好
+
+更多排错细节见 [`zygisk-next-vector-激活速查.md`](zygisk-next-vector-激活速查.md)。
 
 ## 许可
 
